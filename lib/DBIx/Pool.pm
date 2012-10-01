@@ -1,8 +1,5 @@
 package DBIx::Pool;
 
-use strict;
-use warnings;
-
 =head1 NAME
 
 DBIx::Pool - pool of DBI connections
@@ -46,5 +43,50 @@ DBIx::Pool - pool of DBI connections
     # do we need this logic here?
 
 =cut
+
+use Moo;
+no warnings; use warnings; # disable fatal warnings
+
+use MooX::Types::MooseLike::Base qw( HashRef ArrayRef );
+use MooX::Types::MooseLike::Numeric qw( PositiveInt PositiveNum );
+
+has 'max_idle_time' => (
+    is => 'ro',
+    isa => PositiveNum,
+    default => sub { 300 },
+);
+
+has 'max_size' => (
+    is => 'ro',
+    isa => PositiveInt,
+    predicate => 1,
+);
+
+has '_pool' => (
+    is => 'ro',
+    isa => HashRef[ArrayRef],
+    default => sub {
+        {}
+    },
+);
+
+sub add {
+    my $self = shift;
+    my ($name, $dbh) = @_;
+
+    push @{ $self->_pool->{$name} }, $dbh; # FIXME - wrap $dbh in DBD::Pool
+}
+
+sub get {
+    my $self = shift;
+    my ($name) = @_;
+
+    my $dbhs = $self->_pool->{$name};
+    if ($dbhs) {
+        my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
+        return $dbh;
+    }
+    die "pool is empty and connectors are not implemented yet";
+}
 
 1;

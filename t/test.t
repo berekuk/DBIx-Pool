@@ -21,6 +21,15 @@ is $fake_dbh, $dbh, 'get() a handle added via add()'; # wrapper not implemented 
 
 like exception { $pool->get('blah') }, qr/pool is empty/, 'get() on empty pool fails';
 
+subtest 'get() name parameter' => sub {
+    $pool->add(blah => {});
+    $pool->add(blah => {});
+    ok exception { $pool->get('foo') };
+    ok not exception { $pool->get('blah') };
+    ok not exception { $pool->get('blah') };
+    ok exception { $pool->get('blah') };
+};
+
 subtest 'get() order' => sub {
     my $straight;
     my $reverse;

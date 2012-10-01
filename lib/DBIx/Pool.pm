@@ -82,7 +82,7 @@ sub get {
     my ($name) = @_;
 
     my $dbhs = $self->_pool->{$name};
-    if ($dbhs) {
+    if ($dbhs and @$dbhs) {
         my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
         return $dbh;
     }

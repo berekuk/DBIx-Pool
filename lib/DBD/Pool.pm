@@ -175,13 +175,6 @@ sub FETCH {
     }
 }
 
-sub DESTROY {
-    local $@;
-    my $dbh = shift;
-
-    $dbh->{x_pool_pool}->give_back($dbh->{x_pool_name}, $dbh->{x_pool_selfaddr});
-}
-
 1;
 
 package DBD::Pool::st;

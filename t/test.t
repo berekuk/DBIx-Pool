@@ -45,15 +45,9 @@ sub get_and_give_back :Tests {
     my $dbh = dbh;
     $pool->add(blah => $dbh);
 
-    use Data::Dumper; diag $pool->_pool->{blah}[0];
-    use Data::Dumper; diag Dumper $pool->_pool->{blah}[0];
-
     my $pool_dbh = $pool->get('blah');
     my $str = "$pool_dbh";
     undef $pool_dbh;
-
-    use Data::Dumper; diag $pool->_pool->{blah}[0];
-    use Data::Dumper; diag Dumper $pool->_pool->{blah}[0];
 
     $pool_dbh = $pool->get('blah');
     is $str, "$pool_dbh", 'repeated get() returns the same object';
@@ -72,8 +66,7 @@ sub get_name_parameter :Tests {
     ok exception { push @dbh, $pool->get('blah') };
 };
 
-sub get_order {
-    my $pool = DBIx::Pool->new;
+sub get_order :Tests {
 
     my $straight;
     my $reverse;
@@ -81,10 +74,15 @@ sub get_order {
 
     # chance of failing is 2^100 :)
     for (1 .. 100) {
+        # clear is broken - taken connections return to pool anyway
+        # so we have to create a new pool on each iteration
+        my $pool = DBIx::Pool->new;
+
         my $dbh1 = dbh;
         my $dbh2 = dbh;
         $pool->add(blah => $_) for ($dbh1, $dbh2);
         my ($got1, $got2) = map { $pool->get('blah') } (1,2);
+        $_ = $_->{x_pool_dbh} for ($got1, $got2);
 
         if ($dbh1 eq $got1 and $dbh2 eq $got2) {
             $straight++;
@@ -106,6 +104,9 @@ sub get_order {
     }
 
     fail "get() returns connections in random order" unless $tested;
-};
+}
+
+# TODO - test memory leaks
+# TODO - test ->clear
 
 __PACKAGE__->new->runtests;

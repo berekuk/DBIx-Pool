@@ -51,6 +51,7 @@ use MooX::Types::MooseLike::Base qw( HashRef ArrayRef );
 use MooX::Types::MooseLike::Numeric qw( PositiveInt PositiveNum );
 
 use DBI;
+use DBIx::Pool::Handle;
 use Scalar::Util qw( weaken refaddr );
 
 has 'max_idle_time' => (
@@ -65,18 +66,10 @@ has 'max_size' => (
     predicate => 1,
 );
 
-has '_taken' => (
-    is => 'ro',
-    isa => HashRef,
-    default => sub {
-        {}
-    },
-    clearer => '_clear_taken',
-);
-
 has '_pool' => (
     is => 'ro',
     isa => HashRef[ArrayRef],
+    lazy => 1,
     default => sub {
         {}
     },
@@ -86,7 +79,6 @@ has '_pool' => (
 sub clear {
     my $self = shift;
     $self->_clear_pool;
-    $self->_clear_taken;
 }
 
 sub add {
@@ -103,19 +95,14 @@ sub add {
             pool => $self, # FIXME - circular reference
         }
     );
-    $dbh->{x_pool_selfaddr} = refaddr $dbh;
+    bless $dbh => 'DBIx::Pool::Handle';
     push @{ $self->_pool->{$name} }, $dbh;
 }
 
 sub give_back {
     my $self = shift;
-    my ($name, $addr) = @_;
+    my ($name, $dbh) = @_;
 
-    my $dbh = delete $self->_taken->{$addr};
-    unless ($dbh) {
-        warn "dbh '$name' with addr '$addr' not found in taken list";
-        return;
-    }
     push @{ $self->_pool->{$name} }, $dbh;
 }
 
@@ -127,8 +114,6 @@ sub get {
     die "pool is empty and connectors are not implemented yet" unless $dbhs and @$dbhs;
 
     my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
-    $self->_taken->{refaddr $dbh} = $dbh;
-    weaken $self->_taken->{refaddr $dbh};
     return $dbh;
 }
 

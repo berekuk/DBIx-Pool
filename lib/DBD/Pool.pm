@@ -17,6 +17,12 @@ DBD::Pool - driver for wrapped DBIx::Pool connections
       { dbh => $dbh },
   );
 
+=head1 DESCRIPTION
+
+This DBI driver doesn't do anything special. It just proxies all methods to underlying C<dbh> and stores several I<x_pool_*> variables.
+
+Yep, it's still 250 lines long. DBI internals are crazy. (Also, I'm not very familiar with them, so I'm cargo-culting this code by copy-pasting bits from C<DBD::Safe>.)
+
 =cut
 
 use base qw(DBD::File);

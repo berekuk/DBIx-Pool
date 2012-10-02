@@ -4,41 +4,85 @@ use strict;
 use warnings;
 
 use lib 'lib';
+use parent qw(Test::Class);
 use Test::More;
 use Test::Fatal;
 
 use DBIx::Pool;
 use Scalar::Util qw(blessed);
 
-my $pool = DBIx::Pool->new;
-ok blessed($pool), 'constructor';
+sub constructor :Tests {
+    my $pool = DBIx::Pool->new;
+    ok blessed($pool);
+}
 
-my $fake_dbh = {};
-$pool->add(blah => $fake_dbh);
+sub dbh {
+    my $attr = shift || {};
+    return DBI->connect('DBI:Safe:', undef, undef,
+        {
+         dbi_connect_args => ['dbi:ExampleP:dummy', '', ''],
+         PrintError => 1, RaiseError => 1, AutoCommit => 1,
+         %{$attr},
+        }
+    );
+}
 
-my $dbh = $pool->get('blah');
-is $fake_dbh, $dbh, 'get() a handle added via add()'; # wrapper not implemented yet
+sub get :Tests {
+    my $pool = DBIx::Pool->new;
 
-like exception { $pool->get('blah') }, qr/pool is empty/, 'get() on empty pool fails';
+    my $dbh = dbh;
+    $pool->add(blah => $dbh);
 
-subtest 'get() name parameter' => sub {
-    $pool->add(blah => {});
-    $pool->add(blah => {});
-    ok exception { $pool->get('foo') };
-    ok not exception { $pool->get('blah') };
-    ok not exception { $pool->get('blah') };
-    ok exception { $pool->get('blah') };
+    my $pool_dbh = $pool->get('blah');
+    is $pool_dbh->{x_pool_dbh}, $dbh, 'get() a handle added via add()';
+
+    like exception { $pool->get('blah') }, qr/pool is empty/, 'get() on empty pool fails';
+}
+
+sub get_and_give_back :Tests {
+    my $pool = DBIx::Pool->new;
+
+    my $dbh = dbh;
+    $pool->add(blah => $dbh);
+
+    use Data::Dumper; diag $pool->_pool->{blah}[0];
+    use Data::Dumper; diag Dumper $pool->_pool->{blah}[0];
+
+    my $pool_dbh = $pool->get('blah');
+    my $str = "$pool_dbh";
+    undef $pool_dbh;
+
+    use Data::Dumper; diag $pool->_pool->{blah}[0];
+    use Data::Dumper; diag Dumper $pool->_pool->{blah}[0];
+
+    $pool_dbh = $pool->get('blah');
+    is $str, "$pool_dbh", 'repeated get() returns the same object';
+}
+
+sub get_name_parameter :Tests {
+    my $pool = DBIx::Pool->new;
+
+    $pool->add(blah => dbh);
+    $pool->add(blah => dbh);
+
+    my @dbh;
+    ok exception { push @dbh, $pool->get('foo') };
+    ok not exception { push @dbh, $pool->get('blah') };
+    ok not exception { push @dbh, $pool->get('blah') };
+    ok exception { push @dbh, $pool->get('blah') };
 };
 
-subtest 'get() order' => sub {
+sub get_order {
+    my $pool = DBIx::Pool->new;
+
     my $straight;
     my $reverse;
     my $tested;
 
     # chance of failing is 2^100 :)
     for (1 .. 100) {
-        my $dbh1 = {};
-        my $dbh2 = {};
+        my $dbh1 = dbh;
+        my $dbh2 = dbh;
         $pool->add(blah => $_) for ($dbh1, $dbh2);
         my ($got1, $got2) = map { $pool->get('blah') } (1,2);
 
@@ -64,5 +108,4 @@ subtest 'get() order' => sub {
     fail "get() returns connections in random order" unless $tested;
 };
 
-done_testing;
-
+__PACKAGE__->new->runtests;

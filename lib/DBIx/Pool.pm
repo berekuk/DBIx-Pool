@@ -50,6 +50,9 @@ no warnings; use warnings; # disable fatal warnings
 use MooX::Types::MooseLike::Base qw( HashRef ArrayRef );
 use MooX::Types::MooseLike::Numeric qw( PositiveInt PositiveNum );
 
+use DBI;
+use Scalar::Util qw( weaken refaddr );
+
 has 'max_idle_time' => (
     is => 'ro',
     isa => PositiveNum,
@@ -62,19 +65,58 @@ has 'max_size' => (
     predicate => 1,
 );
 
+has '_taken' => (
+    is => 'ro',
+    isa => HashRef,
+    default => sub {
+        {}
+    },
+    clearer => '_clear_taken',
+);
+
 has '_pool' => (
     is => 'ro',
     isa => HashRef[ArrayRef],
     default => sub {
         {}
     },
+    clearer => '_clear_pool',
 );
+
+sub clear {
+    my $self = shift;
+    $self->_clear_pool;
+    $self->_clear_taken;
+}
 
 sub add {
     my $self = shift;
-    my ($name, $dbh) = @_;
+    my ($name, $inner_dbh) = @_;
 
-    push @{ $self->_pool->{$name} }, $dbh; # FIXME - wrap $dbh in DBD::Pool
+    my $dbh = DBI->connect(
+        'DBI:Pool:',
+        undef,
+        undef,
+        {
+            dbh => $inner_dbh,
+            name => $name,
+            pool => $self, # FIXME - circular reference
+        }
+    );
+    $dbh->{x_pool_selfaddr} = refaddr $dbh;
+    push @{ $self->_pool->{$name} }, $dbh;
+}
+
+sub give_back {
+    my $self = shift;
+    my ($name, $addr) = @_;
+
+    my $dbh = delete $self->_taken->{$addr};
+    unless ($dbh) {
+        warn "dbh '$name' with addr '$addr' not found in taken list";
+        return;
+    }
+    push @{ $self->_pool->{$name} }, $dbh;
 }
 
 sub get {
@@ -82,11 +124,12 @@ sub get {
     my ($name) = @_;
 
     my $dbhs = $self->_pool->{$name};
-    if ($dbhs and @$dbhs) {
-        my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
-        return $dbh;
-    }
-    die "pool is empty and connectors are not implemented yet";
+    die "pool is empty and connectors are not implemented yet" unless $dbhs and @$dbhs;
+
+    my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
+    $self->_taken->{refaddr $dbh} = $dbh;
+    weaken $self->_taken->{refaddr $dbh};
+    return $dbh;
 }
 
 1;

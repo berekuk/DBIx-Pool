@@ -131,22 +131,12 @@ Add a new DBI handle to the pool.
 =cut
 sub add {
     my $self = shift;
-    my ($name, $inner_dbh) = @_;
+    my ($name, $dbh) = @_;
 
     if ($self->has_max_size and $self->size >= $self->max_size) {
         die "pool max size exceeded (".$self->max_size.")";
     }
 
-    my $dbh = DBI->connect(
-        'DBI:Pool:',
-        undef,
-        undef,
-        {
-            dbh => $inner_dbh,
-            name => $name,
-            pool => $self, # FIXME - circular reference
-        }
-    );
     bless $dbh => 'DBIx::Pool::Handle';
     push @{ $self->_pool->{$name} }, $dbh;
     return;
@@ -187,6 +177,7 @@ sub get {
     }
     my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
 
+    $dbh->register_pool($name, $self);
     $self->_taken_stat->{$name}++;
     return $dbh;
 }

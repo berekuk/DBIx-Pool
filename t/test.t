@@ -9,7 +9,7 @@ use Test::More;
 use Test::Fatal;
 
 use DBIx::Pool;
-use Scalar::Util qw(blessed);
+use Scalar::Util qw(blessed refaddr);
 
 sub constructor :Tests {
     my $pool = DBIx::Pool->new;
@@ -34,7 +34,8 @@ sub get :Tests {
     $pool->add(blah => $dbh);
 
     my $pool_dbh = $pool->get('blah');
-    is $pool_dbh->{x_pool_dbh}, $dbh, 'get() a handle added via add()';
+    is $pool_dbh, $dbh, 'get() a handle added via add()';
+    ok $dbh->isa('DBIx::Pool::Handle'), 'original dbh reblessed';
 
     like exception { $pool->get('blah') }, qr/pool is empty/, 'get() on empty pool fails';
 }
@@ -42,8 +43,7 @@ sub get :Tests {
 sub get_and_give_back :Tests {
     my $pool = DBIx::Pool->new;
 
-    my $dbh = dbh;
-    $pool->add(blah => $dbh);
+    $pool->add(blah => dbh);
 
     my $pool_dbh = $pool->get('blah');
     my $str = "$pool_dbh";
@@ -80,7 +80,6 @@ sub get_order :Tests {
         my $dbh2 = dbh;
         $pool->add(blah => $_) for ($dbh1, $dbh2);
         my ($got1, $got2) = map { $pool->get('blah') } (1,2);
-        $_ = $_->{x_pool_dbh} for ($got1, $got2);
 
         if ($dbh1 eq $got1 and $dbh2 eq $got2) {
             $straight++;
@@ -174,6 +173,30 @@ sub max_size :Tests {
     like exception { $pool->get('blah') }, qr/exceeded/;
 }
 
-# TODO - test memory leaks
+sub memory_leak :Tests {
+
+    return 'memory leak test is linux-only' unless $^O eq 'linux';
+
+    my $get_mem_usage = sub {
+        my $file = "/proc/$$/statm";
+        open my $fh, '<', $file or die "Can't open $file: $!";
+        my $stat = do { local $/; <$fh> };
+        my ($mem) = $stat =~ /^(\d+)/;
+        return $mem;
+    };
+
+    my $do_once = sub {
+        dbh();
+        my $pool = DBIx::Pool->new;
+        $pool->add('foo' => dbh) for 1..3;
+        my $dbh = $pool->get('foo');
+    };
+
+    $do_once->();
+    my $mem_usage = $get_mem_usage->();
+    $do_once->() for 1 .. ($ENV{N} || 1000);
+
+    cmp_ok($get_mem_usage->() - $mem_usage, '<', 10);
+}
 
 __PACKAGE__->new->runtests;

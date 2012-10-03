@@ -124,16 +124,6 @@ has '_taken_stat' => (
 
 =over
 
-=item C<clear()>
-
-Clear the pool.
-
-=cut
-sub clear {
-    my $self = shift;
-    $self->_clear_pool; # FIXME - give_back() can return a taken connection to pool
-}
-
 =item C<add($name, $dbh)>
 
 Add a new DBI handle to the pool.
@@ -209,6 +199,10 @@ sub size {
     );
     return $size || 0;
 }
+
+# TODO - implement clear() method
+# It won't be as easy as clearing '_pool' attribute, because some taken connection can be returned back to pool after clearing.
+# So, we'll need to keep some "generation_id" counter and ignore handles in give_back() if it doesn't match.
 
 =back
 

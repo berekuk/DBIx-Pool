@@ -74,8 +74,6 @@ sub get_order :Tests {
 
     # chance of failing is 2^100 :)
     for (1 .. 100) {
-        # clear is broken - taken connections return to pool anyway
-        # so we have to create a new pool on each iteration
         my $pool = DBIx::Pool->new;
 
         my $dbh1 = dbh;
@@ -140,6 +138,5 @@ sub size :Tests {
 }
 
 # TODO - test memory leaks
-# TODO - test ->clear
 
 __PACKAGE__->new->runtests;

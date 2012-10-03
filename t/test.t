@@ -113,7 +113,7 @@ sub connector :Tests {
         }
     );
     my $dbh = $pool->get('blah');
-    ok $dbh->isa('DBI::db');
+    ok $dbh->isa('DBIx::Pool::Handle');
 
     like exception { $pool->get('foo') }, qr/not found/;
 }

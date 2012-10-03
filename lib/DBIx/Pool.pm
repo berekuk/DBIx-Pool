@@ -145,6 +145,16 @@ sub add {
     );
     bless $dbh => 'DBIx::Pool::Handle';
     push @{ $self->_pool->{$name} }, $dbh;
+    return;
+}
+
+sub _add_from_connector {
+    my $self = shift;
+    my ($name) = @_;
+
+    die "pool is empty and connector is not configured" unless $self->has_connector;
+    my $dbh = $self->connector->($name);
+    $self->add($name => $dbh);
 }
 
 sub _give_back {
@@ -171,15 +181,11 @@ sub get {
     # TODO - check max_size
 
     my $dbhs = $self->_pool->{$name};
-    if ($dbhs and @$dbhs) {
-        $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
+    unless ($dbhs and @$dbhs) {
+        $self->_add_from_connector($name);
+        $dbhs = $self->_pool->{$name};
     }
-    elsif ($self->has_connector) {
-        $dbh = $self->connector->($name);
-    }
-    else {
-        die "pool is empty and connector is not configured";
-    }
+    $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
 
     $self->_taken_stat->{$name}++;
     return $dbh;

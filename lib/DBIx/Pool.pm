@@ -42,27 +42,58 @@ DBIx::Pool - pool of DBI connections
     # our old code calculated md5(options) and stored the connection in pool under "$name:$md5" key
     # do we need this logic here?
 
+=head1 ATTRIBUTES
+
+=over
+
 =cut
 
 use Moo;
 no warnings; use warnings; # disable fatal warnings
 
-use MooX::Types::MooseLike::Base qw( HashRef ArrayRef );
+use MooX::Types::MooseLike::Base qw( HashRef ArrayRef CodeRef );
 use MooX::Types::MooseLike::Numeric qw( PositiveInt PositiveNum );
 
 use DBI;
 use DBIx::Pool::Handle;
 use Scalar::Util qw( weaken refaddr );
 
+=item I<max_idle_time>
+
+Connections older than this will be removed from pool.
+
+Measured in seconds.
+
+=cut
 has 'max_idle_time' => (
     is => 'ro',
     isa => PositiveNum,
-    default => sub { 300 },
+    default => sub { 300 }, # TODO - use this value on garbage-collecting
 );
 
+=item I<max_size>
+
+Max pool size. C<get()> and C<add()> will throw an exception if this value is exceeded.
+
+=cut
 has 'max_size' => (
     is => 'ro',
     isa => PositiveInt,
+    predicate => 1,
+);
+
+=item I<connector>
+
+Callback that generates new connections.
+
+This should be a coderef which gets a string name and returns new DBI handle.
+
+If I<connector> is not specified, you'll still be able to populate the pool using C<add()> method.
+
+=cut
+has 'connector' => (
+    is => 'ro',
+    isa => CodeRef,
     predicate => 1,
 );
 
@@ -76,11 +107,27 @@ has '_pool' => (
     clearer => '_clear_pool',
 );
 
+=back
+
+=head1 METHODS
+
+=over
+
+=item C<clear()>
+
+Clear the pool.
+
+=cut
 sub clear {
     my $self = shift;
-    $self->_clear_pool;
+    $self->_clear_pool; # FIXME - give_back() can return a taken connection to pool
 }
 
+=item C<add($name, $dbh)>
+
+Add a new DBI handle to the pool.
+
+=cut
 sub add {
     my $self = shift;
     my ($name, $inner_dbh) = @_;
@@ -99,22 +146,44 @@ sub add {
     push @{ $self->_pool->{$name} }, $dbh;
 }
 
-sub give_back {
+sub _give_back {
     my $self = shift;
     my ($name, $dbh) = @_;
 
     push @{ $self->_pool->{$name} }, $dbh;
 }
 
+=item C<get($name)>
+
+Get a free connection from the pool.
+
+New connection will be created using I<connector> if pool is empty.
+
+=cut
 sub get {
     my $self = shift;
     my ($name) = @_;
 
-    my $dbhs = $self->_pool->{$name};
-    die "pool is empty and connectors are not implemented yet" unless $dbhs and @$dbhs;
+    my $dbh;
 
-    my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
+    # TODO - check max_size
+
+    my $dbhs = $self->_pool->{$name};
+    if ($dbhs and @$dbhs) {
+        $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
+    }
+    elsif ($self->has_connector) {
+        $dbh = $self->connector->($name);
+    }
+    else {
+        die "pool is empty and connector is not configured";
+    }
+
     return $dbh;
 }
+
+=back
+
+=cut
 
 1;

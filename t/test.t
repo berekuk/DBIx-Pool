@@ -106,6 +106,20 @@ sub get_order :Tests {
     fail "get() returns connections in random order" unless $tested;
 }
 
+sub connector :Tests {
+    my $pool = DBIx::Pool->new(
+        connector => sub {
+            my $name = shift;
+            return dbh if $name eq 'blah';
+            die "base '$name' not found";
+        }
+    );
+    my $dbh = $pool->get('blah');
+    ok $dbh->isa('DBI::db');
+
+    like exception { $pool->get('foo') }, qr/not found/;
+}
+
 # TODO - test memory leaks
 # TODO - test ->clear
 

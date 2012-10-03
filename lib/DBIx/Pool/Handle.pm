@@ -17,7 +17,7 @@ sub DESTROY {
     my $pool = $self->{x_pool_pool};
     return unless $pool; # pool can be undef if pool was destroyed, since it's a weakref
 
-    $pool->give_back($self->{x_pool_name} => $self);
+    $pool->_give_back($self->{x_pool_name} => $self);
 }
 
 1;

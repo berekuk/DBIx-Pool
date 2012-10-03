@@ -157,6 +157,23 @@ sub size :Tests {
     is $pool->taken_size, 0;
 }
 
+sub max_size :Tests {
+    my $pool = DBIx::Pool->new(
+        max_size => 3,
+        connector => sub {
+            my $name = shift;
+            return dbh if $name eq 'blah';
+            die "base '$name' not found";
+        },
+    );
+
+    $pool->add('foo' => dbh);
+    $pool->add('foo' => dbh);
+    $pool->add('foo' => dbh);
+    like exception { $pool->add('foo' => dbh) }, qr/exceeded/;
+    like exception { $pool->get('blah') }, qr/exceeded/;
+}
+
 # TODO - test memory leaks
 
 __PACKAGE__->new->runtests;

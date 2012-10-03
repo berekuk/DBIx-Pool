@@ -133,6 +133,10 @@ sub add {
     my $self = shift;
     my ($name, $inner_dbh) = @_;
 
+    if ($self->has_max_size and $self->size >= $self->max_size) {
+        die "pool max size exceeded (".$self->max_size.")";
+    }
+
     my $dbh = DBI->connect(
         'DBI:Pool:',
         undef,
@@ -176,16 +180,12 @@ sub get {
     my $self = shift;
     my ($name) = @_;
 
-    my $dbh;
-
-    # TODO - check max_size
-
     my $dbhs = $self->_pool->{$name};
     unless ($dbhs and @$dbhs) {
         $self->_add_from_connector($name);
         $dbhs = $self->_pool->{$name};
     }
-    $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
+    my $dbh = splice @{$dbhs}, int rand scalar @{$dbhs}, 1;
 
     $self->_taken_stat->{$name}++;
     return $dbh;

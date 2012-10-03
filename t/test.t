@@ -120,6 +120,25 @@ sub connector :Tests {
     like exception { $pool->get('foo') }, qr/not found/;
 }
 
+sub size :Tests {
+    my $pool = DBIx::Pool->new;
+
+    is $pool->size, 0;
+
+    $pool->add('foo' => dbh);
+    $pool->add('foo' => dbh);
+    $pool->add('bar' => dbh);
+    is $pool->size, 3;
+
+    my $dbh = $pool->get('foo');
+    my $dbh2 = $pool->get('bar');
+    is $pool->size, 3;
+    undef $dbh;
+    undef $dbh2;
+
+    is $pool->size, 3;
+}
+
 # TODO - test memory leaks
 # TODO - test ->clear
 

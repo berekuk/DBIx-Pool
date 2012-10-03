@@ -48,15 +48,17 @@ DBIx::Pool - pool of DBI connections
 
 =cut
 
+use namespace::autoclean;
 use Moo;
 no warnings; use warnings; # disable fatal warnings
 
-use MooX::Types::MooseLike::Base qw( HashRef ArrayRef CodeRef );
+use MooX::Types::MooseLike::Base qw( HashRef ArrayRef CodeRef Int );
 use MooX::Types::MooseLike::Numeric qw( PositiveInt PositiveNum );
 
 use DBI;
 use DBIx::Pool::Handle;
 use Scalar::Util qw( weaken refaddr );
+use List::Util qw( sum );
 
 =item I<max_idle_time>
 
@@ -107,6 +109,15 @@ has '_pool' => (
     clearer => '_clear_pool',
 );
 
+has '_taken_stat' => (
+    is => 'ro',
+    isa => HashRef[Int],
+    lazy => 1,
+    default => sub {
+        {}
+    },
+);
+
 =back
 
 =head1 METHODS
@@ -150,6 +161,7 @@ sub _give_back {
     my $self = shift;
     my ($name, $dbh) = @_;
 
+    $self->_taken_stat->{$name}--;
     push @{ $self->_pool->{$name} }, $dbh;
 }
 
@@ -179,7 +191,23 @@ sub get {
         die "pool is empty and connector is not configured";
     }
 
+    $self->_taken_stat->{$name}++;
     return $dbh;
+}
+
+=item C<size()>
+
+Get a total number of connections, both free and taken.
+
+=cut
+sub size {
+    my $self = shift;
+
+    my $size = sum(
+        (map { scalar @$_ } values %{ $self->_pool }),
+        values %{ $self->_taken_stat },
+    );
+    return $size || 0;
 }
 
 =back

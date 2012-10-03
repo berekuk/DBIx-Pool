@@ -191,6 +191,34 @@ sub get {
     return $dbh;
 }
 
+=item C<free_size()>
+
+Get a number of free connections.
+
+=cut
+sub free_size {
+    my $self = shift;
+
+    my $size = sum(
+        (map { scalar @$_ } values %{ $self->_pool }),
+    );
+    return $size || 0;
+}
+
+=item C<taken_size()>
+
+Get a number of taken connections.
+
+=cut
+sub taken_size {
+    my $self = shift;
+
+    my $size = sum(
+        values %{ $self->_taken_stat },
+    );
+    return $size || 0;
+}
+
 =item C<size()>
 
 Get a total number of connections, both free and taken.
@@ -199,11 +227,7 @@ Get a total number of connections, both free and taken.
 sub size {
     my $self = shift;
 
-    my $size = sum(
-        (map { scalar @$_ } values %{ $self->_pool }),
-        values %{ $self->_taken_stat },
-    );
-    return $size || 0;
+    return $self->free_size + $self->taken_size;
 }
 
 # TODO - implement clear() method

@@ -119,22 +119,42 @@ sub connector :Tests {
 }
 
 sub size :Tests {
-    my $pool = DBIx::Pool->new;
+    my $pool = DBIx::Pool->new(
+        connector => sub {
+            my $name = shift;
+            return dbh if $name eq 'blah';
+            die "base '$name' not found";
+        },
+    );
 
     is $pool->size, 0;
+    is $pool->free_size, 0;
+    is $pool->taken_size, 0;
 
     $pool->add('foo' => dbh);
     $pool->add('foo' => dbh);
     $pool->add('bar' => dbh);
     is $pool->size, 3;
+    is $pool->free_size, 3;
+    is $pool->taken_size, 0;
 
     my $dbh = $pool->get('foo');
     my $dbh2 = $pool->get('bar');
     is $pool->size, 3;
-    undef $dbh;
-    undef $dbh2;
+    is $pool->free_size, 1;
+    is $pool->taken_size, 2;
 
-    is $pool->size, 3;
+    my $dbh3 = $pool->get('blah');
+    my $dbh4 = $pool->get('blah');
+    is $pool->size, 5;
+    is $pool->free_size, 1;
+    is $pool->taken_size, 4;
+
+    undef $_ for $dbh, $dbh2, $dbh3, $dbh4;
+
+    is $pool->size, 5;
+    is $pool->free_size, 5;
+    is $pool->taken_size, 0;
 }
 
 # TODO - test memory leaks
